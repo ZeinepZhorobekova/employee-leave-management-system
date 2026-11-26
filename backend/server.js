@@ -1,4 +1,5 @@
-
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -129,6 +130,56 @@ app.post("/api/leaves", async (req, res) => {
 // Start server
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Email and password are required"
+      });
+    }
+
+    const [users] = await db.execute(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
+
+    const user = users[0];
+
+    if (!user || !(await bcrypt.compare(
+      password, user.password_hash
+    ))) {
+      return res.status(401).json({
+        message: "Invalid email or password"
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "2h" }
+    );
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Login failed"
+    });
+  }
 });
 // Approve or reject a leave request
 app.put("/api/leaves/:id/status", async (req, res) => {
